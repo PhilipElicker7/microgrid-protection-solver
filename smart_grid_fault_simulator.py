@@ -1,0 +1,92 @@
+"""
+Multi-Node Power Flow & Fault Automation Simulator
+Created By: Philip Elicker
+Date: July 7, 2026
+
+Description:
+This script models a 3-node radial distribution microgrid using a Y-Bus admittance matrix.
+It utilizes the Gauss-Seidel iterative method to solve for steady-state voltage drop, 
+simulates a catastrophic line-to-ground fault, and demonstrates automated protective 
+relay logic to isolate the fault and stabilize the surviving grid.
+"""
+
+import numpy as np
+
+def run_simulation():
+    # ---------------------------------------------------------
+    # 1. SYSTEM INITIALIZATION & LOAD DEFINITIONS
+    # ---------------------------------------------------------
+    V1 = complex(7200, 0)   # Node 1 (Slack Bus / Substation)
+    V2 = complex(7200, 0)   # Node 2 (Industrial Load Initial Guess)
+    V3 = complex(7200, 0)   # Node 3 (Residential Load Initial Guess)
+    
+    S2 = complex(1_000_000, 500_000)  # Node 2 Demand: 1.0 MW, 0.5 MVAR
+    S3 = complex(1_500_000, 750_000)  # Node 3 Demand: 1.5 MW, 0.75 MVAR
+
+    # ---------------------------------------------------------
+    # 2. ADMITTANCE MATRIX (Y-BUS) CONSTRUCTION
+    # ---------------------------------------------------------
+    y_12 = 1 / complex(0.2, 0.5)
+    y_23 = 1 / complex(0.3, 0.6)
+
+    Ybus = np.zeros((3, 3), dtype=complex)  
+    
+    # Off-Diagonal Elements (Negative line admittance)
+    Ybus[0, 1] = Ybus[1, 0] = -y_12         
+    Ybus[1, 2] = Ybus[2, 1] = -y_23         
+    Ybus[0, 2] = Ybus[2, 0] = complex(0, 0) 
+    
+    # Diagonal Elements (Sum of connected admittances)
+    Ybus[0, 0] = y_12                       
+    Ybus[1, 1] = y_12 + y_23                
+    Ybus[2, 2] = y_23                       
+
+    # ---------------------------------------------------------
+    # 3. STEADY-STATE POWER FLOW (GAUSS-SEIDEL)
+    # ---------------------------------------------------------
+    print("--- RUNNING STEADY STATE SIMULATION ---")
+    tolerance = 0.0001
+    error = 1000
+
+    while error > tolerance:
+        V2_new = (1 / Ybus[1,1]) * ( (-S2 / V2).conjugate() - (Ybus[1,0]*V1 + Ybus[1,2]*V3) )
+        V3_new = (1 / Ybus[2,2]) * ( (-S3 / V3).conjugate() - (Ybus[2,0]*V1 + Ybus[2,1]*V2_new) )
+        
+        error = max(abs(V2_new - V2), abs(V3_new - V3))
+        
+        V2 = V2_new
+        V3 = V3_new
+
+    print(f"Node 2 (Industrial) Voltage:  {abs(V2):.2f} V")
+    print(f"Node 3 (Residential) Voltage: {abs(V3):.2f} V\n")
+
+    # ---------------------------------------------------------
+    # 4. FAULT INJECTION & AUTOMATED PROTECTION RELAY
+    # ---------------------------------------------------------
+    print("--- INJECTING LINE-TO-GROUND FAULT AT NODE 3 ---")
+    V3 = complex(0, 0) # Voltage collapses to 0
+    I_fault = abs(V2 * y_23) 
+    print(f"CRITICAL: Fault current spiked to {I_fault:.2f} Amps!")
+
+    if I_fault > 1000:
+        print("ACTION: Smart Breaker Tripped! Isolating Node 3...\n")
+        
+        # Mathematically sever Wire 2 from the matrix
+        Ybus[1,2] = Ybus[2,1] = complex(0,0)
+        Ybus[1,1] = y_12 
+        S3 = complex(0,0)
+
+        # ---------------------------------------------------------
+        # 5. GRID RECOVERY CALCULATION
+        # ---------------------------------------------------------
+        print("--- RECALCULATING GRID STABILITY ---")
+        error = 1000
+        while error > tolerance:
+            V2_new = (1 / Ybus[1,1]) * ( (-S2 / V2).conjugate() - (Ybus[1,0]*V1 + Ybus[1,2]*V3) )
+            error = abs(V2_new - V2)
+            V2 = V2_new
+
+        print(f"SUCCESS: Grid Stabilized. Node 2 Recovered to {abs(V2):.2f} V")
+
+if __name__ == "__main__":
+    run_simulation()
