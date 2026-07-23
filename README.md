@@ -3,7 +3,7 @@
 ## Overview
 This repository contains a Python-based utility grid simulator that models power flow, voltage drop, and automated fault-protection logic for a 3-node distribution microgrid. 
 
-Rather than relying on black-box commercial software, this project relies on core electrical engineering physics. It programmatically constructs a **Y-Bus Admittance Matrix** and utilizes the **Gauss-Seidel iterative numerical method** to solve for complex power flow in real-time.
+Rather than relying on black-box commercial software, this project relies on core electrical engineering physics. It constructs a **Y-Bus Admittance Matrix** and utilizes the **Gauss-Seidel iterative numerical method** to solve for complex power flow in real-time.
 
 ## Project Architecture
 The simulation runs in three distinct phases:
